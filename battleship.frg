@@ -3,6 +3,7 @@
 sig Game {
    initial1: one Board,
    initial2: one Board,
+   // make both of these {next is linear}, don't use and just new line to separate them
    next1: pfunc Board -> Board,
    next2: pfunc Board -> Board,
 }
@@ -20,11 +21,15 @@ sig Boat {
     spot2: lone BoatSpot
 }
 
+// concern about using integers as booleans: there's a possibility of all integers -8 - 7 being there.
+// definitely see Ed post about using booleans
+
 abstract sig Board {
     board: pfunc Int -> Int -> Space
     boat1: one Boat,
     boat2: one Boat,
     boat3: one Boat,
+    // if we have performance difficulties, it's possible that there's overhead with keeping the boards synced -- seek advice!
     my_turn: lone Int
     has_won: lone Int
 }
