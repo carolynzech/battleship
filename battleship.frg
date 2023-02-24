@@ -1,5 +1,8 @@
 #lang forge/bsl "curiosity modeling" "le4s1dpsmgywfv79@gmail.com"
 
+abstract sig Boolean {}
+one sig True, False extends Boolean {}
+
 sig Game {
    initial1: one Board,
    initial2: one Board,
@@ -11,18 +14,15 @@ sig Game {
 abstract sig Space {}
 
 sig BoatSpot extends Space {
-    hit: lone Int
+    hit: one Boolean
 }
 
 sig MissedStrike extends Space {}
 
 sig Boat {
-    spot1: lone BoatSpot,
-    spot2: lone BoatSpot
+    spot1: one BoatSpot,
+    spot2: one BoatSpot
 }
-
-// concern about using integers as booleans: there's a possibility of all integers -8 - 7 being there.
-// definitely see Ed post about using booleans
 
 abstract sig Board {
     board: pfunc Int -> Int -> Space
@@ -30,8 +30,8 @@ abstract sig Board {
     boat2: one Boat,
     boat3: one Boat,
     // if we have performance difficulties, it's possible that there's overhead with keeping the boards synced -- seek advice!
-    my_turn: lone Int
-    has_won: lone Int
+    my_turn: one Boolean,
+    has_won: one Boolean
 }
 
 one sig Board1, Board2 extends Board {}
@@ -39,10 +39,29 @@ one sig Board1, Board2 extends Board {}
 // to decide whose turn it is, need to count MissedStrikes and hit BoatSpots
 
 pred wellformed {
-    // two players
+    // two players (????)
     // dimensions of each board
-    // positions of boats on board & next to each other (vertical or horizontal - no diagonal)
+    all board: Board | {
+        all row, col : Int | {
+            (row < 0 or col < 0 or row > 4 or col > 4) implies no board.board[row][col]
+        }
+        // positions of boats on board
+        some row,col: Int | {
+            #{spot: BoatSpot | board.board[row][col] = spot} = 6
+        }    
+        // next to each other (vertical or horizontal - no diagonal)
+        // all boat: Boat | {
+        //     some row, col: Int | {
+        //         b
+        //     }
+        // }    
+    }
+    
+
+    
     // 3 boats each player
+
+
 }
 
 pred initState {
@@ -86,7 +105,16 @@ pred move[pre1: Board, post1: Board, pre2: Board, post2: Board, row: Int, col: I
     // vice versa
 }
 
-// ?????
 pred traces {
+    // init[Game.initial1]
+    // init[Game.initial2]
+    // all b1, b2: Board | some (Game.next1[b1] and Game.next2[b2]) implies {
+    //     some row, col: Int, p: Player | {
+    //         move[b, Game.next[b], row, col, p]            
+    //     }
+    //     or
+    //         doNothing[b, Game.next[b]]
+    // }
+
 
 }
