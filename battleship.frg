@@ -1,14 +1,14 @@
-#lang forge/bsl "curiosity modeling" "le4s1dpsmgywfv79@gmail.com"
+#lang forge "curiosity modeling" "le4s1dpsmgywfv79@gmail.com"
 
 abstract sig Boolean {}
 one sig True, False extends Boolean {}
 
 sig Game {
-   initial1: one Board,
-   initial2: one Board,
+   initial1: one Player,
+   initial2: one Player,
    // make both of these {next is linear}, don't use and just new line to separate them
-   next1: pfunc Board -> Board,
-   next2: pfunc Board -> Board,
+   next1: pfunc Player -> Player,
+   next2: pfunc Player -> Player
 }
 
 abstract sig Space {}
@@ -24,43 +24,96 @@ sig Boat {
     spot2: one BoatSpot
 }
 
-abstract sig Board {
-    board: pfunc Int -> Int -> Space
-    boat1: one Boat,
-    boat2: one Boat,
-    boat3: one Boat,
+abstract sig Player {
+    board: pfunc Int -> Int -> Space,
+    // boat1: one Boat,
+    // boat2: one Boat,
+    // boat3: one Boat,
+    boats: set Boat,
     // if we have performance difficulties, it's possible that there's overhead with keeping the boards synced -- seek advice!
     my_turn: one Boolean,
     has_won: one Boolean
 }
 
-one sig Board1, Board2 extends Board {}
+one sig Player1, Player2 extends Player {}
 
 // to decide whose turn it is, need to count MissedStrikes and hit BoatSpots
 
 pred wellformed {
     // two players (????)
+    // #{p: Player | 1=1} = 2
+    some Player1
+    some Player2
+    #{p: Player | p != Player1 and p!= Player2} = 0
+    #{boat: Boat | boat in Player1.boats} = 3
+    #{boat: Boat | boat in Player2.boats} = 3
+
+    
     // dimensions of each board
-    all board: Board | {
-        all row, col : Int | {
-            (row < 0 or col < 0 or row > 4 or col > 4) implies no board.board[row][col]
+    all row, col : Int | {
+        (row < 0 or col < 0 or row > 4 or col > 4) implies (no Player1.board[row][col] and no Player2.board[row][col])
+    }
+    // positions of boats on board
+
+    
+    all space: Space | {
+        // the space can't show up on more than once on a given player's board
+        // this works!!
+        all player : Player | {
+            one row,col : Int | {
+                player.board[row][col] = space
+            }
+            some row, col: Int | (player.board[row][col] = space) implies {
+                all player2 : Player | player != player2 implies {
+                    all row2, col2 : Int | {
+                        player2.board[row2][col2] != space
+                    }
+                    
+                }
+            }
         }
-        // positions of boats on board
-        some row,col: Int | {
-            #{spot: BoatSpot | board.board[row][col] = spot} = 6
-        }    
-        // next to each other (vertical or horizontal - no diagonal)
-        // all boat: Boat | {
-        //     some row, col: Int | {
-        //         b
-        //     }
-        // }    
+
+        // some row, col : Int | (Player1.board[row][col] = space) implies {
+        //     Player2.board[row][col] != space
+        // }
+
+        // some row, col : Int | (Player2.board[row][col] = space) implies {
+        //     Player1.board[row][col] != space
+        // }
+
+        // one row, col : Int | {
+        //     // xor
+        //     (Player1.board[row][col] = space and not Player2.board[row][col] = space) or (not Player1.board[row][col] = space and Player2.board[row][col] = space)
+        // }
     }
     
-
     
-    // 3 boats each player
 
+    // each space either has one spot or none
+
+    // each BoatSpot belongs to only 1 boat
+    all boat: Boat | {
+        // spot at spot1 can't be the same as spot at spot2
+        boat.spot1 != boat.spot2
+        // spot belonging to one boat can't belong to any other boat
+        // all boat2: Boat | boat2 != boat implies {
+        //     boat.spot1 != boat2.spot1
+        //     boat.spot1 != boat2.spot2
+        //     boat.spot2 != boat2.spot2
+        //     boat.spot2 != boat2.spot1
+        // }
+        
+    }
+
+    // there can't be more than one spot per space
+    // this spot can't be anywhere else on this players board
+    // this spot can't be on the other player's board
+    
+    // next to each other (vertical or horizontal - no diagonal)
+    // all boat: Boat | {
+    //     some row, col: Int | {
+    //         player.board[row][col] = boat.spot1 implies (player.board[row][add[col,1]] = boat.spot2 or player.board[row][add[col,-1]] = boat.spot2 or player.board[add[row,1]][col] = boat.spot2 or player.board[add[row,-1]][col] = boat.spot2)
+    //     }
 
 }
 
@@ -78,12 +131,12 @@ pred finalState[p: Player] {
 
 // }
 
-pred validSpot[row: Int, col: Int, board: Board] {
+pred validSpot[row: Int, col: Int, board: Player] {
     // on board
     // either empty or boat spot that isn't hit
 }
 
-pred move[pre1: Board, post1: Board, pre2: Board, post2: Board, row: Int, col: Int] {
+pred move[pre1: Player, post1: Player, pre2: Player, post2: Player, row: Int, col: Int] {
 
     // guard: neither board is in final state
     // should wellformed be part of the guard?
@@ -108,7 +161,7 @@ pred move[pre1: Board, post1: Board, pre2: Board, post2: Board, row: Int, col: I
 pred traces {
     // init[Game.initial1]
     // init[Game.initial2]
-    // all b1, b2: Board | some (Game.next1[b1] and Game.next2[b2]) implies {
+    // all b1, b2: Player | some (Game.next1[b1] and Game.next2[b2]) implies {
     //     some row, col: Int, p: Player | {
     //         move[b, Game.next[b], row, col, p]            
     //     }
@@ -118,3 +171,5 @@ pred traces {
 
 
 }
+
+run {wellformed} for exactly 2 Player
