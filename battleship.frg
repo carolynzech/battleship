@@ -63,19 +63,20 @@ pred wellformed {
 
         // NOTE TO MADISON: couldn't see what this section did because Sterling was taking a while to run (5 mins) with it commmented in and I ran out of time
         // but with lines 66-78 commented out, the rest looks good in the evaluator
-        all player : Player | {
-            all row, col : Int | player.board[row][col] = space implies {
-                all row2, col2: Int | (row != row2 or col != col2) implies {
-                    // the space can't show up on more than once on a given player's board
-                    player.board[row2][col2] != space
-                    // the other player's board cannot contain the space
-                    all player2: Player | player != player2 implies {
-                        player2.board[row][col] != space
-                        player2.board[row2][col2] != space
-                    }
-                }
-            }
-        }
+        // all player : Player | {
+        //     all row, col : Int | player.board[row][col] = space implies {
+        //         all row2, col2: Int | (row != row2 or col != col2) implies {
+        //             // the space can't show up more than once on a given player's board
+        //             player.board[row2][col2] != space
+        //             // the other player's board cannot contain the space
+        //             // all player2: Player | player != player2 implies {
+        //             //     player2.board[row][col] != space
+        //             //     player2.board[row2][col2] != space
+        //             // }
+        //         }
+        //     }
+        // }
+
     }
 
     // each BoatSpot belongs to only 1 boat
@@ -99,21 +100,39 @@ pred wellformed {
 
 pred initState {
     // only boat spots that aren't hit, no strikes
+    no MissedStrike
+
+    all spot : BoatSpot | {
+        spot.hit = False
+    }
     // no one has won
-    // its one player's turn
+    Player1.has_won = False
+    Player2.has_won = False
+    
+    // it's exactly one player's turn
+    (Player1.my_turn = True and Player2.my_turn = False) or (Player1.my_turn = False and Player2.my_turn = True)
 }
 
+// This is true when p has lost the game
 pred finalState[p: Player] {
     // all boat spots on player's board are hit
+    all spot : BoatSpot | {
+        some row, col : Int | {p.board[row][col] = spot} implies {
+            spot.hit = True
+        }
+    }
 }
 
 // pred changeTurn {
 
 // }
 
-pred validSpot[row: Int, col: Int, board: Player] {
+// checks that the selected row, col for the move is valid
+pred validLocation[row: Int, col: Int, p: Player] {
     // on board
+    (row >= 0 and col >= 0 and row <= 3 and col <= 3)
     // either empty or boat spot that isn't hit
+    (no p.board[row][col]) or (some spot: BoatSpot | (p.board[row][col] = spot and spot.hit = False))
 }
 
 pred move[pre1: Player, post1: Player, pre2: Player, post2: Player, row: Int, col: Int] {
@@ -152,4 +171,4 @@ pred traces {
 
 }
 
-run {wellformed} for exactly 2 Player, exactly 6 Boat, exactly 12 BoatSpot, 5 Int
+run {validLocation[2, 2, Player1] wellformed} for exactly 2 Player, exactly 6 Boat, exactly 12 BoatSpot, 5 Int
