@@ -29,7 +29,7 @@ abstract sig Player {
     // boat1: one Boat,
     // boat2: one Boat,
     // boat3: one Boat,
-    boats: set Boat
+    boats: set Boat,
     // if we have performance difficulties, it's possible that there's overhead with keeping the boards synced -- seek advice!
     my_turn: one Boolean,
     has_won: one Boolean
@@ -49,9 +49,9 @@ pred wellformed {
 
     // dimensions of each board
     all row, col : Int | {
-        (row < 0 or col < 0 or row > 4 or col > 4) implies (no Player1.board[row][col] and no Player2.board[row][col])
+        (row < 0 or col < 0 or row > 3 or col > 3) implies (no Player1.board[row][col] and no Player2.board[row][col])
     }
-    // positions of boats on board
+    
     all space: Space | {
 
         // if a space object exists, it must be on a board
@@ -151,6 +151,5 @@ pred traces {
 
 
 }
-// default bitwidth?
 
 run {wellformed} for exactly 2 Player, exactly 6 Boat, exactly 12 BoatSpot, 5 Int
