@@ -40,6 +40,7 @@ sig Board {
 pred wellformed[b: Board] {
     // each board has three boats
     #{boat: Boat | boat in b.boats} = 3
+    
     // check for valid dimensions
     all row, col : Int | {
         (row < 0 or col < 0 or row > 3 or col > 3) implies (no b.board[row][col])
@@ -60,31 +61,40 @@ pred wellformed[b: Board] {
     }
 
     // each BoatSpot belongs to only 1 boat
-    all boat: Boat | {
+    all disj boat, boat2: Boat | (boat in b.boats and boat2 in b.boats) implies {
+        // each boat has two boatspots
+        one boat.spot1
+        one boat.spot2
+
         // spot at spot1 can't be the same as spot at spot2
         boat.spot1 != boat.spot2
+        
         // spot belonging to one boat can't belong to any other boat
-        all boat2: Boat | boat2 != boat implies {
-            boat.spot1 != boat2.spot1
-            boat.spot1 != boat2.spot2
-            boat.spot2 != boat2.spot2
-            boat.spot2 != boat2.spot1
-        }
+        // this is fine on its own
+        boat.spot1 != boat2.spot1
+        boat.spot1 != boat2.spot2
+        boat.spot2 != boat2.spot2
+        boat.spot2 != boat2.spot1
+
         // BoatSpots of this Boat are positioned vertically or horizontally -- no diagonal
         all row, col: Int | (b.board[row][col] = boat.spot1) implies {
             (b.board[row][add[col,1]] = boat.spot2 or b.board[row][add[col,-1]] = boat.spot2 or b.board[add[row,1]][col] = boat.spot2 or b.board[add[row,-1]][col] = boat.spot2)
         }
     }
+    b.has_lost = True iff final[b]
 }
 
 pred init[b: Board] {
-    // only boat spots that aren't hit, no strikes
-    no row, col : Int | {
-        b.board[row][col] = MissedStrike 
+    // no MissedStrikes on initial board
+    all row, col : Int | {
+        no ms : MissedStrike | {
+            b.board[row][col] = ms
+        }
     }
 
+    // no BoatSpots are hit
     all spot : BoatSpot | {
-        some row, col : Int | b.board[row][col] = spot implies {
+        all row, col : Int | b.board[row][col] = spot implies {
             spot.hit = False
         }
     }
@@ -100,7 +110,7 @@ pred final[b: Board] {
         all row, col : Int | (b.board[row][col] = spot) implies {
             spot.hit = True
         }
-    }
+    } 
 }
 
 // checks that for the selected row, col, and board, the move is valid
@@ -114,45 +124,66 @@ pred validLocation[row: Int, col: Int, b: Board] {
 pred move[pre: Board, post: Board, row: Int, col: Int] {
 
     // GUARD
-    // pre board isn't final state
-    not final[pre]
-    
     // valid location for move
     validLocation[row, col, pre]
 
+    // pre board isn't final state
+    not final[pre]
+    pre.has_lost = False
+
     // ACTION
     // if boat spot: 
-    some spot: BoatSpot | pre.board[row][col] = spot implies {
+    all spot: BoatSpot | pre.board[row][col] = spot implies {
         post.board[row][col] = spot
         spot.hit = True
     }
     // if empty location:
     no pre.board[row][col] implies {
-        post.board[row][col] = MissedStrike
+        some ms : MissedStrike | {
+            post.board[row][col] = ms
+        }
     }
 
-    // if final state, Player has lost
-    final[post] implies {
-        post.has_lost = True
+    // everything else stays the same
+    all row2, col2 : Int | (row != row2 or col != col2) implies {
+        post.board[row2][col2] = pre.board[row2][col2]
     }
+
+    // // if final state, Player has lost
+    // final[post] implies {
+    //     post.has_lost = True
+    // }
+}
+
+pred doNothing[pre: Board, post: Board] {
+    -- GUARD
+    some b: Board | b.has_lost = True
+
+    -- ACTION
+    all row, col: Int | 
+        post.board[row][col] = pre.board[row][col]
+
 }
 
 pred traces {
-    // wellformed
 
-    // init[Game.initial1]
-    // init[Game.initial2]
-    // all b1, b2: Board | some (Game.next1[b1] and Game.next2[b2]) implies {
-    //     some row, col: Int, p: Board | {
-    //         move[b, Game.next[b], row, col, p]            
-    //     }
-    //     or
-    //         doNothing[b, Game.next[b]]
-    // }
-
+    init[Game.initial]
+    all b: Board | some Game.next[b] implies {
+        some row, col: Int | {
+            move[b, Game.next[b], row, col]            
+        }
+        // or
+        //     doNothing[b, Game.next[b]]
+    }
 
 }
 
+
+// run {
+//     some b : Board | wellformed[b] and final[b]
+// } for exactly 1 Board, exactly 3 Boat, exactly 6 BoatSpot
+
 run {
-    all b: Board | wellformed[b]
-} for exactly 2 Board, exactly 3 Boat, exactly 6 BoatSpot, 5 Int
+    all b : Board | wellformed[b]
+    traces
+} for exactly 3 Board, exactly 3 Boat, exactly 6 BoatSpot, 10 MissedStrike for {next is linear}
