@@ -37,11 +37,6 @@ pred wellformed[b: Board] {
     }
 
     all space: Space | {
-        // if a space object exists, it must be on a board
-        some row, col: Int | {
-            b.board[row][col] = space
-        }
-
         all row, col, row2, col2 : Int | (row != row2 or col != col2) implies {
             // the space can't show up more than once on a given player's board
             b.board[row][col] = space implies (b.board[row2][col2] != space)
@@ -117,25 +112,26 @@ pred move[pre: Board, post: Board, row: Int, col: Int] {
     // pre.has_lost = False
 
     // // ACTION
-    // // moving here hits the boatspot
-    some spot: BoatSpot | (pre.board[row][col] = spot) implies {
-        post.board[row][col] = spot
-        pre.hit_boatspots[spot] = False
-        post.hit_boatspots[spot] = True
-    }
-    // either one boatspot is hit (case above) or none are (case below)
-    #{spot : BoatSpot | pre.hit_boatspots[spot] != post.hit_boatspots[spot]} <= 1
+    // some pre.board[row][col]
 
-    // // if striking empty location:
-    no pre.board[row][col] implies {
-        // PROBLEM: this implication doesn't hold
+    // // If the place we're moving is a boatspot:
+    some pre.board[row][col] implies {
+        post.board[row][col] = pre.board[row][col]
+        pre.hit_boatspots[pre.board[row][col]] = False
+        post.hit_boatspots[post.board[row][col]] = True
+    } else {
+        // if striking empty location:
         some ms : MissedStrike | {
             post.board[row][col] = ms
         }
         pre.hit_boatspots = post.hit_boatspots
     }
 
-    // // all other spaces on the board stays the same
+    // MAINTAIN PREVIOUS/UNINVOLVED
+    // either one boatspot is hit (case above) or none are (case below)
+    #{spot : BoatSpot | pre.hit_boatspots[spot] != post.hit_boatspots[spot]} <= 1
+
+    // all other spaces on the board stays the same
     all row2, col2 : Int | (row != row2 or col != col2) implies {
         post.board[row2][col2] = pre.board[row2][col2]
     }
@@ -143,13 +139,14 @@ pred move[pre: Board, post: Board, row: Int, col: Int] {
 
 pred doNothing[pre: Board, post: Board] {
     -- GUARD
-    some b: Board | b.has_lost = True
+    pre.has_lost = True
 
     -- ACTION
     all row, col: Int | 
         post.board[row][col] = pre.board[row][col]
     
     #{spot : BoatSpot | pre.hit_boatspots[spot] != post.hit_boatspots[spot]} = 0
+    post.has_lost = True
 
 }
 
@@ -175,4 +172,4 @@ pred traces {
 run {
     all b : Board | wellformed[b]
     traces
-} for exactly 5 Board, exactly 3 Boat, exactly 6 BoatSpot for {next is linear}
+} for exactly 4 Board, exactly 3 Boat, exactly 6 BoatSpot, exactly 1 MissedStrike for {next is linear}
