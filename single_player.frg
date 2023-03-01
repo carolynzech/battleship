@@ -3,20 +3,14 @@
 abstract sig Boolean {}
 one sig True, False extends Boolean {}
 
-// whether we should have actual defined empty space that extends space
-// he thinks that the adjacency checking isn't working
-
 one sig Game {
    initial: one Board,
-   // make both of these {next is linear}, don't use and just new line to separate them
    next: pfunc Board -> Board
 }
 
 abstract sig Space {}
 
-sig BoatSpot extends Space {
-    hit: one Boolean
-}
+sig BoatSpot extends Space {}
 
 sig MissedStrike extends Space {}
 
@@ -27,17 +21,13 @@ sig Boat {
 
 sig Board {
     board: pfunc Int -> Int -> Space,
-    // boat1: one Boat,
-    // boat2: one Boat,
-    // boat3: one Boat,
     boats: set Boat,
-    // if we have performance difficulties, it's possible that there's overhead with keeping the boards synced -- seek advice!
+    hit_boatspots: func BoatSpot -> Boolean,
     has_lost: one Boolean
 }
 
-// to decide whose turn it is, need to count MissedStrikes and hit BoatSpots
-
 pred wellformed[b: Board] {
+
     // each board has three boats
     #{boat: Boat | boat in b.boats} = 3
     
@@ -53,14 +43,11 @@ pred wellformed[b: Board] {
         }
 
         all row, col, row2, col2 : Int | (row != row2 or col != col2) implies {
-            b.board[row][col] = space implies {
-                // the space can't show up more than once on a given player's board
-                (b.board[row2][col2] != space)
-            }
+            // the space can't show up more than once on a given player's board
+            b.board[row][col] = space implies (b.board[row2][col2] != space)
         }
     }
 
-    // each BoatSpot belongs to only 1 boat
     all disj boat, boat2: Boat | (boat in b.boats and boat2 in b.boats) implies {
         // each boat has two boatspots
         one boat.spot1
@@ -70,7 +57,6 @@ pred wellformed[b: Board] {
         boat.spot1 != boat.spot2
         
         // spot belonging to one boat can't belong to any other boat
-        // this is fine on its own
         boat.spot1 != boat2.spot1
         boat.spot1 != boat2.spot2
         boat.spot2 != boat2.spot2
@@ -95,7 +81,7 @@ pred init[b: Board] {
     // no BoatSpots are hit
     all spot : BoatSpot | {
         all row, col : Int | b.board[row][col] = spot implies {
-            spot.hit = False
+            b.hit_boatspots[spot] = False
         }
     }
 
@@ -108,9 +94,9 @@ pred final[b: Board] {
     // all boat spots on Board's board are hit
     all spot : BoatSpot | {
         all row, col : Int | (b.board[row][col] = spot) implies {
-            spot.hit = True
+            b.hit_boatspots[spot] = True
         }
-    } 
+    }
 }
 
 // checks that for the selected row, col, and board, the move is valid
@@ -118,7 +104,7 @@ pred validLocation[row: Int, col: Int, b: Board] {
     // on board
     (row >= 0 and col >= 0 and row <= 3 and col <= 3)
     // either empty or boat spot that isn't hit
-    (no b.board[row][col]) or (some spot: BoatSpot | (b.board[row][col] = spot and spot.hit = False))
+    (no b.board[row][col]) or (some spot: BoatSpot | (b.board[row][col] = spot and b.hit_boatspots[spot] = False))
 }
 
 pred move[pre: Board, post: Board, row: Int, col: Int] {
@@ -126,33 +112,33 @@ pred move[pre: Board, post: Board, row: Int, col: Int] {
     // GUARD
     // valid location for move
     validLocation[row, col, pre]
-
     // pre board isn't final state
     not final[pre]
-    pre.has_lost = False
+    // pre.has_lost = False
 
-    // ACTION
-    // if boat spot: 
-    all spot: BoatSpot | pre.board[row][col] = spot implies {
+    // // ACTION
+    // // moving here hits the boatspot
+    some spot: BoatSpot | (pre.board[row][col] = spot) implies {
         post.board[row][col] = spot
-        spot.hit = True
+        pre.hit_boatspots[spot] = False
+        post.hit_boatspots[spot] = True
     }
-    // if empty location:
+    // either one boatspot is hit (case above) or none are (case below)
+    #{spot : BoatSpot | pre.hit_boatspots[spot] != post.hit_boatspots[spot]} <= 1
+
+    // // if striking empty location:
     no pre.board[row][col] implies {
+        // PROBLEM: this implication doesn't hold
         some ms : MissedStrike | {
             post.board[row][col] = ms
         }
+        pre.hit_boatspots = post.hit_boatspots
     }
 
-    // everything else stays the same
+    // // all other spaces on the board stays the same
     all row2, col2 : Int | (row != row2 or col != col2) implies {
         post.board[row2][col2] = pre.board[row2][col2]
     }
-
-    // // if final state, Player has lost
-    // final[post] implies {
-    //     post.has_lost = True
-    // }
 }
 
 pred doNothing[pre: Board, post: Board] {
@@ -162,28 +148,31 @@ pred doNothing[pre: Board, post: Board] {
     -- ACTION
     all row, col: Int | 
         post.board[row][col] = pre.board[row][col]
+    
+    #{spot : BoatSpot | pre.hit_boatspots[spot] != post.hit_boatspots[spot]} = 0
 
 }
 
 pred traces {
-
     init[Game.initial]
+    // all states are reachable through next from the initial state except the initial state
+    // and the initial state is not reachable from anything
+    // every board except initial itself is reachable from initial, forcing initial to be the first board
+    all b : Board | {
+        Game.next[b] != Game.initial
+    }
+
     all b: Board | some Game.next[b] implies {
         some row, col: Int | {
             move[b, Game.next[b], row, col]            
         }
-        // or
-        //     doNothing[b, Game.next[b]]
+        or
+            doNothing[b, Game.next[b]]
     }
 
 }
 
-
-// run {
-//     some b : Board | wellformed[b] and final[b]
-// } for exactly 1 Board, exactly 3 Boat, exactly 6 BoatSpot
-
 run {
     all b : Board | wellformed[b]
     traces
-} for exactly 3 Board, exactly 3 Boat, exactly 6 BoatSpot, 10 MissedStrike for {next is linear}
+} for exactly 5 Board, exactly 3 Boat, exactly 6 BoatSpot for {next is linear}

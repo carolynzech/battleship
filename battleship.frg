@@ -6,7 +6,7 @@ one sig True, False extends Boolean {}
 // whether we should have actual defined empty space that extends space
 // he thinks that the adjacency checking isn't working
 
-sig Game {
+one sig Game {
    initial1: one Player,
    initial2: one Player,
    // make both of these {next is linear}, don't use and just new line to separate them
@@ -45,6 +45,8 @@ one sig Player1, Player2 extends Player {}
 pred wellformed {
     some Player1
     some Player2
+    some Player1.board
+    some Player2.board
     #{p: Player | p != Player1 and p!= Player2} = 0
     #{boat: Boat | boat in Player1.boats} = 3
     #{boat: Boat | boat in Player2.boats} = 3
@@ -64,24 +66,10 @@ pred wellformed {
             }
         }
 
-        all row, col, row2, col2 : Int | (row != row2 or col != col2) implies {
-                Player1.board[row][col] = space implies {
-                    // the space can't show up more than once on a given player's board
-                    (Player1.board[row2][col2] != space)
-                    // the other player's board cannot contain the space
-                    Player2.board[row][col] != space
-                    Player2.board[row2][col2] != space
-                }
-                Player2.board[row][col] = space implies {
-                    // the space can't show up more than once on a given player's board
-                    (Player2.board[row2][col2] != space)
-                    // the other player's board cannot contain the space
-                    Player1.board[row][col] != space
-                    Player1.board[row2][col2] != space
-                }
-        }
-    }
+        // Can't have the same BoatSpot in multiple locations on one board or have the same BoatSpot on different boards
+        (no (Player1.board.space & Player2.board.space)) and one (Player1.board.space + Player2.board.space)
 
+    }
     // each BoatSpot belongs to only 1 boat
     all boat: Boat | {
         // spot at spot1 can't be the same as spot at spot2
@@ -174,4 +162,4 @@ pred traces {
 
 }
 
-run {validLocation[2, 2, Player1] wellformed} for exactly 2 Player, exactly 6 Boat, exactly 12 BoatSpot, 5 Int
+run {wellformed} for exactly 2 Player, exactly 6 Boat, exactly 12 BoatSpot, 5 Int
