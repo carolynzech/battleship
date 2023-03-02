@@ -3,22 +3,14 @@
 abstract sig Boolean {}
 one sig True, False extends Boolean {}
 
-// whether we should have actual defined empty space that extends space
-// he thinks that the adjacency checking isn't working
-
 one sig Game {
-   initial1: one Player,
-   initial2: one Player,
-   // make both of these {next is linear}, don't use and just new line to separate them
-   next1: pfunc Player -> Player,
-   next2: pfunc Player -> Player
+   initial: one Board,
+   next: pfunc Board -> Board
 }
 
 abstract sig Space {}
 
-sig BoatSpot extends Space {
-    hit: one Boolean
-}
+sig BoatSpot extends Space {}
 
 sig MissedStrike extends Space {}
 
@@ -27,139 +19,159 @@ sig Boat {
     spot2: one BoatSpot
 }
 
-abstract sig Player {
+sig Board {
     board: pfunc Int -> Int -> Space,
-    // boat1: one Boat,
-    // boat2: one Boat,
-    // boat3: one Boat,
     boats: set Boat,
-    // if we have performance difficulties, it's possible that there's overhead with keeping the boards synced -- seek advice!
-    my_turn: one Boolean,
-    has_won: one Boolean
+    hit_boatspots: func BoatSpot -> Boolean,
+    has_lost: one Boolean
 }
 
-one sig Player1, Player2 extends Player {}
+pred wellformed[b: Board] {
 
-// to decide whose turn it is, need to count MissedStrikes and hit BoatSpots
-
-pred wellformed {
-    some Player1
-    some Player2
-    some Player1.board
-    some Player2.board
-    #{p: Player | p != Player1 and p!= Player2} = 0
-    #{boat: Boat | boat in Player1.boats} = 3
-    #{boat: Boat | boat in Player2.boats} = 3
-    #{Player1.boats & Player2.boats} = 0
-
-    // dimensions of each board
-    all row, col : Int | {
-        (row < 0 or col < 0 or row > 3 or col > 3) implies (no Player1.board[row][col] and no Player2.board[row][col])
-    }
+    // each board has three boats
+    #{boat: Boat | boat in b.boats} = 3
     
-    all space: Space | {
-
-        // if a space object exists, it must be on a board
-        some player : Player | {
-            some row, col: Int | {
-                player.board[row][col] = space
-            }
-        }
-
-        // Can't have the same BoatSpot in multiple locations on one board or have the same BoatSpot on different boards
-        (no (Player1.board.space & Player2.board.space)) and one (Player1.board.space + Player2.board.space)
-
+    // check for valid dimensions
+    all row, col : Int | {
+        (row < 0 or col < 0 or row > 5 or col > 5) implies (no b.board[row][col])
     }
-    // each BoatSpot belongs to only 1 boat
-    all boat: Boat | {
+
+    all space: Space | {
+        all row, col, row2, col2 : Int | (row != row2 or col != col2) implies {
+            // the space can't show up more than once on a given player's board
+            b.board[row][col] = space implies (b.board[row2][col2] != space)
+        }
+    }
+
+    all disj boat, boat2: Boat | (boat in b.boats and boat2 in b.boats) implies {
+        // each boat has two boatspots
+        one boat.spot1
+        one boat.spot2
+
         // spot at spot1 can't be the same as spot at spot2
         boat.spot1 != boat.spot2
+        
         // spot belonging to one boat can't belong to any other boat
-        all boat2: Boat | boat2 != boat implies {
-            boat.spot1 != boat2.spot1
-            boat.spot1 != boat2.spot2
-            boat.spot2 != boat2.spot2
-            boat.spot2 != boat2.spot1
-        }
+        boat.spot1 != boat2.spot1
+        boat.spot1 != boat2.spot2
+        boat.spot2 != boat2.spot2
+        boat.spot2 != boat2.spot1
+
         // BoatSpots of this Boat are positioned vertically or horizontally -- no diagonal
-        some row, col: Int | {
-            Player1.board[row][col] = boat.spot1 implies (Player1.board[row][add[col,1]] = boat.spot2 or Player1.board[row][add[col,-1]] = boat.spot2 or Player1.board[add[row,1]][col] = boat.spot2 or Player1.board[add[row,-1]][col] = boat.spot2)
-            Player2.board[row][col] = boat.spot1 implies (Player2.board[row][add[col,1]] = boat.spot2 or Player2.board[row][add[col,-1]] = boat.spot2 or Player2.board[add[row,1]][col] = boat.spot2 or Player2.board[add[row,-1]][col] = boat.spot2)
+        all row, col: Int | (b.board[row][col] = boat.spot1) implies {
+            (b.board[row][add[col,1]] = boat.spot2 or b.board[row][add[col,-1]] = boat.spot2 or b.board[add[row,1]][col] = boat.spot2 or b.board[add[row,-1]][col] = boat.spot2)
+        }
+    }
+    b.has_lost = True iff final[b]
+}
+
+pred init[b: Board] {
+    // no MissedStrikes on initial board
+    all row, col : Int | {
+        no ms : MissedStrike | {
+            b.board[row][col] = ms
+        }
+    }
+
+    // no BoatSpots are hit
+    // all BoatSpots must be present on the initial board. This contraint, combined with the constraints in 
+    // move and doNothing about the board, ensures that every boatspot is present in the same spot on every board
+    all spot : BoatSpot | {
+        some row, col : Int | {
+            b.board[row][col] = spot
+            b.board[row][col] = spot implies b.hit_boatspots[spot]= False
+        }
+    }
+    // player hasn't lost
+    b.has_lost = False
+}
+
+// This is true when Board has lost the game
+pred final[b: Board] {
+    // all boat spots on Board's board are hit
+    all spot : BoatSpot | {
+        all row, col : Int | (b.board[row][col] = spot) implies {
+            b.hit_boatspots[spot] = True
         }
     }
 }
 
-pred initState {
-    // only boat spots that aren't hit, no strikes
-    no MissedStrike
-
-    all spot : BoatSpot | {
-        spot.hit = False
-    }
-    // no one has won
-    Player1.has_won = False
-    Player2.has_won = False
-    
-    // it's exactly one player's turn
-    (Player1.my_turn = True and Player2.my_turn = False) or (Player1.my_turn = False and Player2.my_turn = True)
-}
-
-// This is true when p has lost the game
-pred finalState[p: Player] {
-    // all boat spots on player's board are hit
-    all spot : BoatSpot | {
-        some row, col : Int | {p.board[row][col] = spot} implies {
-            spot.hit = True
-        }
-    }
-}
-
-// pred changeTurn {
-
-// }
-
-// checks that the selected row, col for the move is valid
-pred validLocation[row: Int, col: Int, p: Player] {
+// Checks that (row, col) is a valid spot for a move on Board b
+// A spot is valid if it is on the board and if it contains 1) an empty space or 2) a BoatSpot that has not yet been hit
+pred validLocation[row: Int, col: Int, b: Board] {
     // on board
-    (row >= 0 and col >= 0 and row <= 3 and col <= 3)
+    (row >= 0 and col >= 0 and row <= 5 and col <= 5)
     // either empty or boat spot that isn't hit
-    (no p.board[row][col]) or (some spot: BoatSpot | (p.board[row][col] = spot and spot.hit = False))
+    (no b.board[row][col]) or (some spot: BoatSpot | (b.board[row][col] = spot and b.hit_boatspots[spot] = False))
 }
 
-pred move[pre1: Player, post1: Player, pre2: Player, post2: Player, row: Int, col: Int] {
+pred move[pre: Board, post: Board, row: Int, col: Int] {
 
-    // guard: neither board is in final state
-    // should wellformed be part of the guard?
+    // GUARD
+    validLocation[row, col, pre]
+    not final[pre]
+
+    // ACTION
+
+    // If the place we're moving is a boatspot:
+    some pre.board[row][col] implies {
+        post.board[row][col] = pre.board[row][col] // boatspot remains in place
+        pre.hit_boatspots[pre.board[row][col]] = False
+        post.hit_boatspots[post.board[row][col]] = True // set hit to true
+    } else {
+        // if striking empty location, insert a MissedStrike on the board
+        some ms : MissedStrike | {
+            post.board[row][col] = ms
+        }
+        pre.hit_boatspots = post.hit_boatspots // no boatspot should be hit
+    }
+
+    // MAINTAIN PREVIOUS/UNINVOLVED fields
+
+    // either one boatspot is hit (board[row][col] is a boatspot) or none are (board[row][col] is an empty space)
+    // since we check that there's no change for the empty space case, this is really just a fast way to check that
+    // only one boatspot was hit during the move without having to loop over all other row, col
+    #{spot : BoatSpot | pre.hit_boatspots[spot] != post.hit_boatspots[spot]} <= 1
+
+    // all other spaces on the board stays the same
+    all row2, col2 : Int | (row != row2 or col != col2) implies {
+        post.board[row2][col2] = pre.board[row2][col2]
+    }
+}
+
+pred doNothing[pre: Board, post: Board] {
+    -- GUARD
+    pre.has_lost = True
+
+    -- ACTION
+    all row, col: Int | 
+        post.board[row][col] = pre.board[row][col]
     
-    // if board1's turn:
-        // if validSpot[row, col, board2]:
-            // if boat spot: 
-                // post2[row][col].hit = 1
-            // if nothing:
-                // post2[row][col] = MissedStrike
-        // post1 = pre1 // only one board changes at a time
+    #{spot : BoatSpot | pre.hit_boatspots[spot] != post.hit_boatspots[spot]} = 0
+    post.has_lost = True
 
-    // same for board2
-
-    // if finalState of board1: set board2 has_won to 1
-    // if finalState of board2: set board1 has_won to 1
-
-    // if it was board1's turn, it's board2's
-    // vice versa
 }
 
 pred traces {
-    // init[Game.initial1]
-    // init[Game.initial2]
-    // all b1, b2: Player | some (Game.next1[b1] and Game.next2[b2]) implies {
-    //     some row, col: Int, p: Player | {
-    //         move[b, Game.next[b], row, col, p]            
-    //     }
-    //     or
-    //         doNothing[b, Game.next[b]]
-    // }
+    init[Game.initial]
+    // all states are reachable through next from the initial state except the initial state
+    // and the initial state is not reachable from anything
+    // every board except initial itself is reachable from initial, forcing initial to be the first board
+    all b : Board | {
+        Game.next[b] != Game.initial
+    }
 
+    all b: Board | some Game.next[b] implies {
+        some row, col: Int | {
+            move[b, Game.next[b], row, col]            
+        }
+        or
+            doNothing[b, Game.next[b]]
+    }
 
 }
 
-run {wellformed} for exactly 2 Player, exactly 6 Boat, exactly 12 BoatSpot, 5 Int
+run {
+    all b : Board | wellformed[b]
+    traces
+} for exactly 4 Board, exactly 3 Boat, exactly 6 BoatSpot, exactly 1 MissedStrike for {next is linear}
