@@ -1024,7 +1024,7 @@ test expect {
         }
     } is theorem
 
-    // // can't move anywhere from a final board
+    // can't move anywhere from a final board
     cantMoveFromFinal : {
         all pre, post : Board | wellformed[pre] and final[pre] implies {
             no r, c : Int | {
