@@ -18,7 +18,7 @@ sig BoatSpot extends Space {}
 sig MissedStrike extends Space {}
 
 // note that there is no "Empty" sig--we made this modeling choice because it takes less storage to just write 
-// "no b.board" for some Board b than to have a bunch of Empty objects
+// "no b.board[row][col]" for some row, col : Int, Board b than to have a bunch of Empty objects
 
 // Boats are comprised of two adjacent BoatSpots
 sig Boat {
@@ -30,8 +30,7 @@ sig Boat {
 sig Board {
     board: pfunc Int -> Int -> Space, // row index -> column index -> Space
     boats: set Boat, // set of boats that belong to this Board
-    hit_boatspots: func BoatSpot -> Boolean, // for each BoatSpot, maps to True if it has been hit in this state, false otherwise
-    has_lost: one Boolean // True if the player has lost the game, False otherwise
+    hit_boatspots: func BoatSpot -> Boolean // for each BoatSpot, maps to True if it has been hit in this state, false otherwise
 }
 
 // Each Board is required to be wellformed. All other predicates should be run in combination with this one.
@@ -71,12 +70,12 @@ pred wellformed[b: Board] {
             (b.board[row][add[col,1]] = boat.spot2 or b.board[row][add[col,-1]] = boat.spot2 or b.board[add[row,1]][col] = boat.spot2 or b.board[add[row,-1]][col] = boat.spot2)
         }
     }
-    // has_lost is only true if final is true
-    b.has_lost = True iff final[b]
 }
 
 // Checks if Board b is a valid initial state
 pred init[b: Board] {
+    // board is nonempty
+    some b.board
     // no MissedStrikes on initial board
     all row, col : Int | {
         no ms : MissedStrike | {
@@ -92,12 +91,13 @@ pred init[b: Board] {
             b.board[row][col] = spot implies b.hit_boatspots[spot]= False
         }
     }
-    // player hasn't lost
-    b.has_lost = False
 }
 
 // Checks if Board b is a valid final state, i.e., if all boats are sunk
 pred final[b: Board] {
+    // board is nonempty
+    some b.board
+
     // all boat spots on Board's board are hit
     all spot : BoatSpot | {
         b.hit_boatspots[spot] = True
@@ -150,7 +150,9 @@ pred move[pre: Board, post: Board, row: Int, col: Int] {
 // True if nothing has changed between pre and post. Used once the game is over but the trace has more boards
 pred doNothing[pre: Board, post: Board] {
     -- GUARD
-    pre.has_lost = True // should only doNothing if the game is already over
+    // should only doNothing if the game is already over
+    final[pre]
+    final[post]
 
     -- ACTION
     // board shouldn't change
@@ -159,11 +161,9 @@ pred doNothing[pre: Board, post: Board] {
     
     // hit_boatspots shouldn't change
     #{spot : BoatSpot | pre.hit_boatspots[spot] != post.hit_boatspots[spot]} = 0
-    
-    post.has_lost = True
 }
 
-// Create Board traces
+// Create complete game traces, from initial Board to end of game
 pred traces {
     init[Game.initial]
     
@@ -180,6 +180,9 @@ pred traces {
             doNothing[b, Game.next[b]]
     }
 
+    // no partial traces; Game must be over at end of trace
+    some b : Board | no Game.next[b] and final[b]
+
 }
 
  -------------- EXAMPLES FOR STERLING  -------------- 
@@ -194,7 +197,7 @@ pred traces {
 // Some properties you can observe in the evaluator are:
 //      -- no MissedStrikes on the board
 //      -- b.hit_boatspots maps to False for all BoatSpots
-//      -- b.has_lost is False
+//      -- final[b] is false
 // run {
 //     all b : Board | wellformed[b] and init[b]
 // } for exactly 1 Board, exactly 3 Boat, exactly 6 BoatSpot for {next is linear}
@@ -202,7 +205,7 @@ pred traces {
 // One wellformed final Board
 // Some properties you can observe in the evaluator are:
 //      -- b.hit_boatspots maps to True for all BoatSpots
-//      -- b.has_lost is True
+//      -- final[b] is true
 // run {
 //     all b : Board | wellformed[b] and final[b]
 // } for exactly 1 Board, exactly 3 Boat, exactly 6 BoatSpot for {next is linear}
